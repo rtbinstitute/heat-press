@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Heat Press Station</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=Share+Tech+Mono&display=swap">
+<style>
+/* Layout: phone-first single column; sticky tab bar; transfer list -> detail view with a controller-style readout */
+:root{
+  --bg:#eef0f2; --surface:#ffffff; --sunk:#e3e6ea; --line:#d2d6dc;
+  --fg:#16191d; --muted:#5b636e;
+  --heat:#d9480f; --heat-ink:#ffffff; --heat-soft:#fde7dc;
+  --warn:#9a5b00; --warn-soft:#fff1d6; --ok:#1f7a4d; --ok-soft:#dcf3e6;
+  --lcd-bg:#1b1f24; --lcd-fg:#ff6b2c; --lcd-dim:#7d4a35;
+  --f-display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-lcd:"Share Tech Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#111417; --surface:#1a1e23; --sunk:#23282e; --line:#323840;
+  --fg:#eceef1; --muted:#9aa3ae;
+  --heat:#ff6a2b; --heat-ink:#1a0d06; --heat-soft:#3a2016;
+  --warn:#f2b54a; --warn-soft:#352812; --ok:#5fd398; --ok-soft:#14301f;
+  --lcd-bg:#0a0c0e; --lcd-fg:#ff7a3d; --lcd-dim:#5c3626; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111417; --surface:#1a1e23; --sunk:#23282e; --line:#323840;
+  --fg:#eceef1; --muted:#9aa3ae;
+  --heat:#ff6a2b; --heat-ink:#1a0d06; --heat-soft:#3a2016;
+  --warn:#f2b54a; --warn-soft:#352812; --ok:#5fd398; --ok-soft:#14301f;
+  --lcd-bg:#0a0c0e; --lcd-fg:#ff7a3d; --lcd-dim:#5c3626; color-scheme:dark}
+*{box-sizing:border-box}
+html{color-scheme:light}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 var(--f-body);-webkit-text-size-adjust:100%}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--fg)}
+.wrap{max-width:720px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1,h2,h3{font-family:var(--f-display);font-weight:700;text-wrap:balance;margin:0;letter-spacing:.01em;line-height:1.1}
+a{color:var(--heat)}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--heat);outline-offset:2px}
+
+/* header */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--fg);color:var(--bg)}
+.top .wrap{display:flex;align-items:center;gap:12px;padding-block:12px 0;flex-wrap:wrap}
+.brand{display:flex;align-items:baseline;gap:10px;flex:1;min-width:0}
+.brand h1{font-size:26px;text-transform:uppercase}
+@media (max-width:440px){.brand span{display:none}}
+.brand span{white-space:nowrap;font-size:12px;opacity:.7;letter-spacing:.06em;text-transform:uppercase}
+.tabs{display:flex;gap:2px;width:100%;overflow-x:auto;scrollbar-width:none}
+.tabs a{flex:1 0 auto;text-align:center;padding:10px 8px 11px;color:inherit;opacity:.65;text-decoration:none;font-family:var(--f-display);font-size:17px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;border-bottom:3px solid transparent;white-space:nowrap}
+.tabs a[aria-current="page"]{opacity:1;border-color:var(--heat)}
+
+main{padding-block:18px 48px}
+.view{display:grid;gap:16px}
+.lead{color:var(--muted);margin:0}
+.eyebrow{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+
+/* search & filters */
+.search{width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--surface);font-size:16px}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 14px;font-size:14px;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+
+/* transfer list */
+.group{display:grid;gap:8px}
+.group h2{font-size:20px;text-transform:uppercase;color:var(--muted);letter-spacing:.04em}
+.tlist{display:grid;gap:8px;list-style:none;margin:0;padding:0}
+.titem{display:grid;grid-template-columns:1fr auto;gap:4px 12px;align-items:center;padding:14px 16px;background:var(--surface);border:1px solid var(--line);border-radius:12px;text-decoration:none;color:inherit}
+.titem:hover{border-color:var(--heat)}
+.titem b{font-size:16px;font-weight:600;min-width:0}
+.titem .meta{grid-column:1;display:flex;gap:6px;flex-wrap:wrap;align-items:center;color:var(--muted);font-size:13px}
+.titem .quick{grid-row:1/3;grid-column:2;font-family:var(--f-lcd);font-size:18px;text-align:right;line-height:1.25;font-variant-numeric:tabular-nums}
+.titem .quick small{display:block;color:var(--muted);font-size:13px}
+.tag{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:2px 8px;border-radius:4px;background:var(--sunk);color:var(--fg)}
+.tag.second{background:var(--warn-soft);color:var(--warn)}
+.empty{padding:20px;text-align:center;color:var(--muted);background:var(--surface);border:1px dashed var(--line);border-radius:12px}
+
+/* detail */
+.back{display:inline-flex;align-items:center;gap:6px;text-decoration:none;color:var(--muted);font-size:14px}
+.dhead{display:grid;gap:6px}
+.dhead h2{font-size:34px}
+.variants{display:flex;gap:6px;flex-wrap:wrap}
+.lcd{background:var(--lcd-bg);border-radius:14px;padding:16px;display:grid;grid-template-columns:1fr 1fr;gap:12px;box-shadow:inset 0 0 0 2px #00000040}
+.lcd div{display:grid;gap:2px}
+.lcd .lab{font-family:var(--f-lcd);color:var(--lcd-dim);font-size:13px;letter-spacing:.1em}
+.lcd .val{font-family:var(--f-lcd);color:var(--lcd-fg);font-size:clamp(34px,10vw,52px);line-height:1;font-variant-numeric:tabular-nums;text-shadow:0 0 12px color-mix(in srgb,var(--lcd-fg) 45%,transparent)}
+.lcd .val small{font-size:.45em;margin-left:4px}
+.lcd .wide{grid-column:1/-1;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;border-top:1px solid #ffffff1a;padding-top:10px}
+.lcd .wide span{font-family:var(--f-lcd);color:var(--lcd-fg);font-size:16px}
+.lcd .wide em{font-style:normal;color:var(--lcd-dim);margin-right:6px}
+
+.alert{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:start;padding:14px 16px;border-radius:12px;border:2px solid var(--warn);background:var(--warn-soft)}
+.alert.ok{border-color:var(--line);background:var(--surface)}
+.alert svg{width:26px;height:26px;color:var(--warn)}
+.alert.ok svg{color:var(--ok)}
+.alert h3{font-size:20px;text-transform:uppercase;color:var(--warn)}
+.alert.ok h3{color:var(--ok)}
+.alert p{margin:2px 0 0}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;display:grid;gap:12px}
+.card h3{font-size:22px;text-transform:uppercase}
+ol.steps{list-style:none;margin:0;padding:0;display:grid;gap:2px;counter-reset:s}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:30px 1fr;gap:10px;padding:10px 0;border-top:1px solid var(--line);align-items:start}
+ol.steps li:first-child{border-top:0}
+ol.steps li::before{content:counter(s);width:26px;height:26px;border-radius:50%;background:var(--fg);color:var(--bg);display:grid;place-items:center;font-family:var(--f-display);font-weight:700;font-size:15px}
+ol.steps li.hot::before{background:var(--heat);color:var(--heat-ink)}
+ol.steps label{display:flex;gap:10px;align-items:flex-start;cursor:pointer}
+ol.steps input{margin-top:4px;width:18px;height:18px;accent-color:var(--heat);flex:none}
+ol.steps input:checked+span{color:var(--muted);text-decoration:line-through}
+ul.notes{margin:0;padding-left:20px;display:grid;gap:6px}
+dl.facts{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;margin:0}
+dl.facts dt{color:var(--muted);font-size:13px;text-transform:uppercase;letter-spacing:.05em;padding-top:2px}
+dl.facts dd{margin:0;min-width:0}
+.src{font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+
+/* panel diagram */
+.diagram{background:var(--sunk);border-radius:12px;padding:12px;overflow-x:auto}
+.diagram svg{display:block;width:100%;max-width:520px;height:auto;margin:0 auto}
+
+/* admin */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 16px;border-radius:10px;border:1px solid var(--line);background:var(--surface);cursor:pointer;font-weight:600}
+.btn.primary{background:var(--heat);color:var(--heat-ink);border-color:var(--heat)}
+.btn.danger{color:#c62828;border-color:currentColor;background:transparent}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.form{display:grid;gap:12px}
+.form label{display:grid;gap:4px;font-size:13px;font-weight:600;color:var(--muted)}
+.form input,.form select,.form textarea{padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);font-weight:400;color:var(--fg);font-size:15px;width:100%}
+.form textarea{min-height:90px;resize:vertical}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.hint{font-size:12px;font-weight:400;color:var(--muted)}
+.status{font-size:14px;padding:10px 12px;border-radius:8px;background:var(--sunk)}
+.status.bad{background:var(--warn-soft);color:var(--warn)}
+.status.good{background:var(--ok-soft);color:var(--ok)}
+.adminlist{display:grid;gap:6px;list-style:none;margin:0;padding:0}
+.adminlist li{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:10px 12px;background:var(--surface);border:1px solid var(--line);border-radius:10px}
+.adminlist li span{min-width:0;overflow-wrap:anywhere}
+footer{color:var(--muted);font-size:12px;text-align:center;padding-block:8px 24px}
+footer a{color:inherit}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+
+<header class="top"><div class="wrap">
+  <div class="brand"><h1>Heat Press Station</h1><span>Scan · Pick · Press</span></div>
+  <nav class="tabs" aria-label="Sections">
+    <a href="#transfers" data-tab="transfers">Transfers</a>
+    <a href="#setup" data-tab="setup">Setup</a>
+    <a href="#hats" data-tab="hats">Hats</a>
+    <a href="#tips" data-tab="tips">Tips</a>
+  </nav>
+</div></header>
+<main class="wrap" id="app"><p class="lead">Loading transfer settings…</p></main>
+<footer class="wrap" id="foot"></footer>
+
+<!--
+  ============================================================
+  EDIT TRANSFERS HERE
+  Each transfer is one { ... } block in the "transfers" list below.
+  To add one: copy an existing block, paste it after a comma, and change:
+    id        short unique name, no spaces (used in links: #t-your-id)
+    brand     supplier name (transfers are grouped by this)
+    name      product name
+    kind      DTF, Plastisol, Puff, Hybrid ... (becomes a filter chip)
+    settings  one entry per fabric: label, temp (°F), time (sec)
+    pressure, peel, prepress, cover
+    second    "required", "recommended" or "no"
+    secondText  what to do for the second press
+    notes     list of watch-outs
+    source    link to the manufacturer's instructions ("" if none)
+  Change "updated" to today's date. Keep the commas and quotes intact;
+  if the page shows "Loading..." forever, a comma or quote is off.
+  ============================================================
+-->
+<script type="application/json" id="press-data">
+{"updated":"2026-11-06","transfers":[
+{"id":"ninja-dtf","brand":"Ninja Transfers","name":"DTF Transfers","kind":"DTF","settings":[{"label":"Cotton & cotton blends","temp":"310","time":"12"},{"label":"Polyester","temp":"320","time":"12"},{"label":"Nylon / delicate blends","temp":"300","time":"12"}],"pressure":"Medium–high","peel":"Warm: wait about 5 sec, then peel","prepress":"Optional, 3–5 sec to flatten","second":"required","secondText":"After peeling, cover with the parchment sheet and press again about 12 sec at the same settings. Makes the print softer, less shiny and much more durable.","cover":"Use the parchment sheet that ships with the order (or a silicone/Teflon sheet).","notes":["Ninja's instructions list 300–320°F. Start at 310°F on cotton, go to the high end on polyester.","Pressing over side seams and hat seams is OK.","If an edge lifts: lay the film back down and press again with about 15°F more heat and a little more pressure. Re-pressing will not hurt the transfer."],"source":"https://ninjatransfers.com/pages/heat-press-instructions-for-dtf-transfers"},
+{"id":"ninja-puff","brand":"Ninja Transfers","name":"3D Puff Transfers","kind":"Puff","settings":[{"label":"Shirts & hoodies","temp":"350","time":"7"}],"pressure":"Heavy","peel":"Hot: peel immediately","prepress":"3–5 sec","second":"no","secondText":"No second press. Pressing puff again flattens the raised effect.","cover":"","notes":["Peel the carrier right away while it is still hot. Waiting lets it stick.","Use heat tape when pressing on hats so the transfer cannot shift."],"source":"https://ninjatransfers.com/pages/heat-press-instructions-for-3d-puff-transfers"},
+{"id":"dtf-worldwide","brand":"DTF Worldwide","name":"Full Color DTF Transfers","kind":"DTF","settings":[{"label":"All garments","temp":"300","time":"15"}],"pressure":"Medium–firm","peel":"Check the sheet. Most DTF peels after cooling a few seconds.","prepress":"3–5 sec","second":"required","secondText":"Second press is required. After peeling, cover with parchment or a Teflon sheet and press again (5–10 sec) to lock the ink in.","cover":"Parchment or Teflon sheet for the second press.","notes":["This is the transfer people most often skip the second press on. Don't.","If the film pulls ink up when you peel, lay it back down, press again and wait longer before peeling."],"source":""},
+{"id":"te-goof-proof","brand":"Transfer Express","name":"Goof Proof (screen printed)","kind":"Plastisol","settings":[{"label":"1 color · cotton & blends","temp":"365","time":"4–6"},{"label":"1 color · 100% polyester","temp":"330","time":"10–12"},{"label":"Multi-color · any fabric","temp":"365","time":"10"}],"pressure":"Medium–firm (6–8)","peel":"Hot: peel immediately","prepress":"3–5 sec","second":"no","secondText":"No second press needed.","cover":"","notes":["Pick the right row above. The 1-color cotton time is short (4–6 sec); the multi-color time is 10 sec.","Peel in one smooth motion while hot. If ink stays on the paper, lay it back down and press 3–5 sec more."],"source":"https://www.transferexpress.com/application-instructions"},
+{"id":"te-goof-proof-premium","brand":"Transfer Express","name":"Goof Proof Premium","kind":"Plastisol","settings":[{"label":"All fabrics","temp":"320","time":"10"}],"pressure":"Medium–firm (6–8)","peel":"Hot: peel immediately","prepress":"3–5 sec","second":"no","secondText":"No second press needed.","cover":"","notes":["Lower temperature than regular Goof Proof. Don't use the 365°F setting."],"source":"https://www.transferexpress.com/application-instructions"},
+{"id":"te-puff","brand":"Transfer Express","name":"Puff (screen printed)","kind":"Puff","settings":[{"label":"Cotton & cotton/poly only","temp":"340","time":"8"}],"pressure":"Medium–firm (6–8)","peel":"Hot: peel immediately, no hesitation","prepress":"5 sec","second":"no","secondText":"No second press. It flattens the puff.","cover":"","notes":["Not for 100% polyester."],"source":"https://www.transferexpress.com/application-instructions"},
+{"id":"te-ultracolor-max","brand":"Transfer Express","name":"UltraColor Max (DTF)","kind":"DTF","settings":[{"label":"All fabrics","temp":"290","time":"12–15"}],"pressure":"Medium (6)","peel":"Hot","prepress":"3–5 sec","second":"no","secondText":"Transfer Express does not list a second press for UltraColor Max.","cover":"","notes":["Runs cooler than other DTF brands. Don't use Ninja or DTF Worldwide settings on this one."],"source":"https://www.transferexpress.com/application-instructions"},
+{"id":"te-ultracolor-pro","brand":"Transfer Express","name":"UltraColor Pro (hybrid)","kind":"Hybrid","settings":[{"label":"Cotton & cotton/poly","temp":"340","time":"10"},{"label":"100% polyester","temp":"290","time":"15"}],"pressure":"Firm (6–8)","peel":"Hot: peel within 1–2 sec","prepress":"3–5 sec","second":"no","secondText":"No second press needed.","cover":"Do NOT use a cover sheet or pillow.","notes":["Peel fast. This one is unforgiving if it cools on the shirt."],"source":"https://www.transferexpress.com/application-instructions"}
+]}
+</script>
+
+<script id="press-main">
+(function(){
+"use strict";
+const DATA = JSON.parse(document.getElementById("press-data").textContent);
+const app = document.getElementById("app");
+const foot = document.getElementById("foot");
+let filter = "All", query = "";
+
+
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+const kinds = () => ["All", ...Array.from(new Set(DATA.transfers.map(t => t.kind)))];
+const byId = id => DATA.transfers.find(t => t.id === id);
+const icon = {
+  warn:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2 20h20L12 3z"/><path d="M12 10v4"/><path d="M12 17.5v.01"/></svg>',
+  ok:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></svg>'
+};
+
+function setTab(name){
+  document.querySelectorAll(".tabs a").forEach(a => { if (a.dataset.tab === name) a.setAttribute("aria-current","page"); else a.removeAttribute("aria-current"); });
+}
+
+/* ---------- Transfer list ---------- */
+function renderList(){
+  setTab("transfers");
+  const q = query.trim().toLowerCase();
+  const items = DATA.transfers.filter(t => (filter === "All" || t.kind === filter) &&
+    (!q || (t.brand + " " + t.name + " " + t.kind).toLowerCase().includes(q)));
+  const brands = Array.from(new Set(items.map(t => t.brand)));
+  app.innerHTML = `
+  <section class="view">
+    <div style="display:grid;gap:6px">
+      <span class="eyebrow">Step 1</span>
+      <h2 style="font-size:30px">Which transfer do you have?</h2>
+      <p class="lead">Find the brand printed on your transfer sheet or packing slip. Tap it for the exact temperature, time and peel.</p>
+    </div>
+    <input id="search" class="search" type="search" placeholder="Search brand or type (e.g. Ninja, puff)" value="${esc(query)}" aria-label="Search transfers">
+    <div class="chips" role="group" aria-label="Filter by type">
+      ${kinds().map(k => `<button class="chip" data-kind="${esc(k)}" aria-pressed="${k === filter}">${esc(k)}</button>`).join("")}
+    </div>
+    ${brands.length ? brands.map(b => `
+      <div class="group"><h2>${esc(b)}</h2>
+        <ul class="tlist">${items.filter(t => t.brand === b).map(t => {
+          const s = t.settings[0] || {};
+          const multi = t.settings.length > 1;
+          return `<li><a class="titem" href="#t-${esc(t.id)}">
+            <b>${esc(t.name)}</b>
+            <span class="quick">${esc(s.temp)}°F<small>${esc(s.time)} sec${multi ? " +" : ""}</small></span>
+            <span class="meta"><span class="tag">${esc(t.kind)}</span>${t.second === "required" ? '<span class="tag second">2nd press</span>' : ""}${multi ? `<span>${t.settings.length} fabric settings</span>` : ""}</span>
+          </a></li>`;}).join("")}
+        </ul></div>`).join("") : `<div class="empty">No transfers match. Check the brand name on the packing slip, or ask the station admin to add it.</div>`}
+  </section>`;
+  const s = document.getElementById("search");
+  s.addEventListener("input", e => { query = e.target.value; const pos = e.target.selectionStart; renderList(); const n = document.getElementById("search"); n.focus(); try{ n.setSelectionRange(pos,pos);}catch(_){} });
+  app.querySelectorAll(".chip").forEach(c => c.addEventListener("click", () => { filter = c.dataset.kind; renderList(); }));
+}
+
+/* ---------- Transfer detail ---------- */
+function renderDetail(t, vi){
+  setTab("transfers");
+  vi = Math.min(vi || 0, t.settings.length - 1);
+  const s = t.settings[vi] || {temp:"—",time:"—"};
+  const second = t.second === "required";
+  const recommended = t.second === "recommended";
+  const steps = [
+    `Turn the press on and set it to <b>${esc(s.temp)}°F</b> and <b>${esc(s.time)} sec</b>. Wait until PV (present temp) reaches ${esc(s.temp)}°F. <a href="#setup">How to set it</a>`,
+    `Set pressure to <b>${esc(t.pressure)}</b>. Close the empty press on a sheet of paper; it should take firm effort to lock the handle.`,
+    `Slide out the bottom platen. Lint-roll the shirt, lay it flat, and prepress ${esc(t.prepress || "3–5 sec")} to remove moisture and wrinkles.`,
+    `Place the transfer <b>ink side down</b> on the shirt. For a centered front print, fold the shirt in half to find the center line and start about 3 finger-widths below the collar.`,
+    t.cover ? esc(t.cover) : `No cover sheet is needed for the first press unless the shirt scorches easily.`,
+    `Slide the platen in and lock the handle. The timer starts on its own. Open when it beeps.`,
+    `<b>Peel:</b> ${esc(String(t.peel).replace(/\.$/,""))}.`
+  ];
+  if (second || recommended) steps.push(`<b>Second press:</b> ${esc(t.secondText)}`);
+  app.innerHTML = `
+  <section class="view">
+    <a class="back" href="#transfers">← All transfers</a>
+    <div class="dhead">
+      <span class="eyebrow">${esc(t.brand)} · ${esc(t.kind)}</span>
+      <h2>${esc(t.name)}</h2>
+    </div>
+    ${t.settings.length > 1 ? `<div style="display:grid;gap:6px"><span class="eyebrow">What fabric?</span><div class="variants">${t.settings.map((v,i) => `<button class="chip" data-v="${i}" aria-pressed="${i===vi}">${esc(v.label)}</button>`).join("")}</div></div>` : ""}
+    <div class="lcd" role="group" aria-label="Press settings">
+      <div><span class="lab">TEMP</span><span class="val">${esc(s.temp)}<small>°F</small></span></div>
+      <div><span class="lab">TIME</span><span class="val">${esc(s.time)}<small>SEC</small></span></div>
+      <div class="wide"><span><em>PRESSURE</em>${esc(t.pressure)}</span><span><em>PEEL</em>${esc(String(t.peel).split(/[:.]/)[0])}</span></div>
+    </div>
+    ${second ? `<div class="alert">${icon.warn}<div><h3>Second press required</h3><p>${esc(t.secondText)}</p></div></div>`
+      : recommended ? `<div class="alert">${icon.warn}<div><h3>Second press recommended</h3><p>${esc(t.secondText)}</p></div></div>`
+      : `<div class="alert ok">${icon.ok}<div><h3>One press only</h3><p>${esc(t.secondText || "No second press needed.")}</p></div></div>`}
+    <div class="card">
+      <h3>Press it</h3>
+      <ol class="steps">${steps.map((h,i) => `<li class="${i===steps.length-1 && (second||recommended) ? "hot" : ""}"><label><input type="checkbox" id="step-${esc(t.id)}-${i}"><span>${h}</span></label></li>`).join("")}</ol>
+    </div>
+    ${t.notes && t.notes.length ? `<div class="card"><h3>Watch out for</h3><ul class="notes">${t.notes.map(n => `<li>${esc(n)}</li>`).join("")}</ul></div>` : ""}
+    <div class="card">
+      <h3>From the manufacturer</h3>
+      <dl class="facts">
+        ${t.settings.map(v => `<dt>${esc(v.label)}</dt><dd>${esc(v.temp)}°F · ${esc(v.time)} sec</dd>`).join("")}
+        <dt>Pressure</dt><dd>${esc(t.pressure)}</dd>
+        <dt>Peel</dt><dd>${esc(t.peel)}</dd>
+        <dt>Prepress</dt><dd>${esc(t.prepress || "—")}</dd>
+      </dl>
+      ${t.source ? `<p class="src">Official instructions: <a href="${esc(t.source)}" target="_blank" rel="noopener">${esc(t.source.replace(/^https?:\/\//,""))}</a></p>` : `<p class="src">Settings from the supplier's sheet. Always follow the sheet that came with your order if it differs.</p>`}
+    </div>
+  </section>`;
+  app.querySelectorAll("[data-v]").forEach(b => b.addEventListener("click", () => renderDetail(t, +b.dataset.v)));
+  window.scrollTo(0,0);
+}
+
+/* ---------- Press setup ---------- */
+const panelSVG = `<svg viewBox="0 0 420 170" role="img" aria-label="Controller panel with temperature display, SET button and up/down arrows">
+  <rect x="2" y="2" width="416" height="166" rx="14" fill="var(--surface)" stroke="var(--line)" stroke-width="2"/>
+  <rect x="22" y="22" width="190" height="76" rx="8" fill="var(--lcd-bg)"/>
+  <text x="117" y="78" text-anchor="middle" font-family="Share Tech Mono, monospace" font-size="48" fill="var(--lcd-fg)">310</text>
+  <text x="36" y="40" font-family="Share Tech Mono, monospace" font-size="12" fill="var(--lcd-dim)">TEMP °F</text>
+  <rect x="22" y="110" width="190" height="40" rx="8" fill="var(--lcd-bg)"/>
+  <text x="117" y="138" text-anchor="middle" font-family="Share Tech Mono, monospace" font-size="24" fill="var(--lcd-fg)">012</text>
+  <text x="36" y="125" font-family="Share Tech Mono, monospace" font-size="10" fill="var(--lcd-dim)">SEC</text>
+  <circle cx="262" cy="86" r="26" fill="var(--heat)"/>
+  <text x="262" y="92" text-anchor="middle" font-family="Barlow Condensed, sans-serif" font-weight="700" font-size="18" fill="var(--heat-ink)">SET</text>
+  <text x="262" y="132" text-anchor="middle" font-size="11" fill="var(--muted)" font-family="IBM Plex Sans, sans-serif">(or OK)</text>
+  <circle cx="352" cy="56" r="22" fill="var(--sunk)" stroke="var(--line)"/>
+  <path d="M352 46 362 62H342Z" fill="var(--fg)"/>
+  <circle cx="352" cy="116" r="22" fill="var(--sunk)" stroke="var(--line)"/>
+  <path d="M352 126 362 110H342Z" fill="var(--fg)"/>
+</svg>`;
+function renderSetup(){
+  setTab("setup");
+  app.innerHTML = `
+  <section class="view">
+    <div style="display:grid;gap:6px">
+      <span class="eyebrow">Heat Press Nation 15×15 clamshell &amp; hat press · same controls</span>
+      <h2 style="font-size:30px">Set temperature, time and pressure</h2>
+      <p class="lead">Do this before you touch a shirt. The press needs 10–20 minutes to reach temperature from cold.</p>
+    </div>
+    <div class="diagram">${panelSVG}</div>
+    <div class="card">
+      <h3>Read the display: PV &amp; SV</h3>
+      <dl class="facts">
+        <dt>PV</dt><dd><b>Present Value</b>: the temperature the platen is right now.</dd>
+        <dt>SV</dt><dd><b>Set Value</b>: the temperature the press is heating to (your target).</dd>
+      </dl>
+      <p style="margin:0">You are ready to press only when <b>PV matches SV</b>. If PV is still climbing, wait.</p>
+    </div>
+    <div class="card">
+      <h3>On the control panel</h3>
+      <ol class="steps">
+        <li><span></span><span>Flip the <b>red power switch</b> on. The display shows <b>PV</b>, the platen's present temperature.</span></li>
+        <li><span></span><span>Press <b>SET</b> (labeled <b>OK</b> on some models) until the temperature setting shows (<b>SV</b>, or <b>SP</b> on some panels). Use <b>▲ / ▼</b> to dial in the temperature for your transfer.</span></li>
+        <li><span></span><span>Press <b>SET</b> again to get to the time setting (<b>SL</b> on some panels). Use <b>▲ / ▼</b> to set the seconds.</span></li>
+        <li><span></span><span>Press <b>SET</b> again (or hold it about 3 sec) to save and return to the PV (present temperature) display. The press starts heating toward the SV.</span></li>
+        <li><span></span><span><b>Wait</b> until <b>PV equals SV</b>. Pressing early is the #1 cause of transfers peeling off in the wash.</span></li>
+      </ol>
+    </div>
+    <div class="card">
+      <h3>Pressure</h3>
+      <ol class="steps">
+        <li><span></span><span>Pressure is the <b>knob on top</b> of the heat platen. Adjust it only with the press <b>open</b>.</span></li>
+        <li><span></span><span><b>Clockwise = more pressure.</b> Counter-clockwise = less.</span></li>
+        <li><span></span><span><b>Paper test:</b> put a sheet of paper on the bottom platen and lock the press. If the paper slides out easily, add pressure. Check all four sides.</span></li>
+        <li><span></span><span>Thick items (hoodies, seams, zipper areas) need less knob pressure than a thin tee. Re-check when you change garments.</span></li>
+      </ol>
+    </div>
+    <div class="card">
+      <h3>Pressing</h3>
+      <ol class="steps">
+        <li><span></span><span>Pull the <b>bottom platen out</b> on its drawer. Load and arrange the garment away from the heat.</span></li>
+        <li><span></span><span>Slide it back in until it stops, then pull the handle down to lock. <b>The timer starts automatically.</b></span></li>
+        <li><span></span><span>When it beeps, lift the handle, slide the drawer out and peel as your transfer's page says.</span></li>
+      </ol>
+    </div>
+    <div class="card">
+      <h3>Safety & shutdown</h3>
+      <ul class="notes">
+        <li>The top platen is hot enough to burn instantly. Keep hands on the handle and drawer only.</li>
+        <li>Leave the press <b>open</b> between jobs. Never leave it locked closed while heated.</li>
+        <li>Plug straight into a wall outlet, no extension cords or power strips.</li>
+        <li>When you are the last one done, switch it off and leave it open to cool.</li>
+      </ul>
+    </div>
+    <p class="src">Controller steps from the Heat Press Nation slide-out manual and setup guide. Button labels vary slightly by production year.</p>
+  </section>`;
+  fixNumbers();
+}
+
+/* ---------- Hats ---------- */
+function renderHats(){
+  setTab("hats");
+  app.innerHTML = `
+  <section class="view">
+    <div style="display:grid;gap:6px">
+      <span class="eyebrow">Hat press</span>
+      <h2 style="font-size:30px">Pressing caps</h2>
+      <p class="lead">The hat press uses the same controller, setup and functions as the 15×15 clamshell. Set temperature, time and pressure exactly as shown on <a href="#setup">Setup</a>, using the settings from your transfer's page.</p>
+    </div>
+    <div class="alert">${icon.warn}<div><h3>Always tape it</h3><p>A curved platen lets transfers slide. Put heat-resistant tape on at least two edges of every hat transfer.</p></div></div>
+    <div class="card">
+      <h3>Steps</h3>
+      <ol class="steps">
+        <li><span></span><span>Set the temp and time from your transfer's page and wait for the press to heat.</span></li>
+        <li><span></span><span>Remove any cardboard or plastic insert from the hat. Pull the hat snugly over the curved lower platen so the front panel is tight with no ripples.</span></li>
+        <li><span></span><span>Prepress 3–5 sec to flatten the crown.</span></li>
+        <li><span></span><span>Center the transfer on the front seam (use the button on top as your guide) and tape it down.</span></li>
+        <li><span></span><span>Press with <b>medium</b> pressure. Too much pressure leaves a shiny press box on structured hats.</span></li>
+        <li><span></span><span>Peel exactly as your transfer says. For DTF, do the second press with a parchment sheet if required.</span></li>
+      </ol>
+    </div>
+    <div class="card">
+      <h3>Hat tips</h3>
+      <ul class="notes">
+        <li>Designs wider than the platen: press the center, then rock the hat to each side and press again, overlapping slightly.</li>
+        <li>Pressing across the center seam is fine for DTF. Make sure the seam is fully under heat.</li>
+        <li>Most transfer makers don't publish separate hat settings. If adhesion is weak, add 2–3 sec or a little pressure. Never jump straight to max heat.</li>
+        <li>Foam-front trucker hats and nylon/poly caps melt easily. Run a test on a scrap or the back of a spare hat first.</li>
+      </ul>
+    </div>
+  </section>`;
+  fixNumbers();
+}
+
+/* ---------- Tips ---------- */
+function renderTips(){
+  setTab("tips");
+  app.innerHTML = `
+  <section class="view">
+    <div style="display:grid;gap:6px">
+      <span class="eyebrow">Get it right the first time</span>
+      <h2 style="font-size:30px">Tips & fixes</h2>
+    </div>
+    <div class="card">
+      <h3>Before you press</h3>
+      <ul class="notes">
+        <li><b>Match the brand.</b> A DTF from one company can need 290°F while another needs 320°F. Settings are not interchangeable.</li>
+        <li><b>Check the fabric tag.</b> 100% polyester usually needs lower heat than cotton (except Ninja DTF, which runs higher on poly).</li>
+        <li><b>Do a test.</b> On a new brand or new garment type, press one test piece before the whole order.</li>
+        <li><b>Lint-roll, then prepress.</b> Fuzz and moisture are why transfers lift at the edges.</li>
+        <li><b>Use a pressing pillow</b> for hoodies, polos and anything with zippers, buttons or thick seams so the print area sits flat.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Placement guide (adult tee)</h3>
+      <dl class="facts">
+        <dt>Front center</dt><dd>3–4 in (about 3 finger-widths) below the collar</dd>
+        <dt>Left chest</dt><dd>About 3.5 in wide, 7–9 in down from the shoulder seam, centered over the left chest</dd>
+        <dt>Full back</dt><dd>About 4–5 in below the collar</dd>
+        <dt>Youth / small</dt><dd>2–3 in below the collar</dd>
+      </dl>
+    </div>
+    <div class="card">
+      <h3>Something went wrong</h3>
+      <dl class="facts">
+        <dt>Edges lifting</dt><dd>Lay the film/paper back down and press again 5–10 sec. Next time, check pressure and that the press was fully at temp.</dd>
+        <dt>Ink lifting with backing</dt><dd>The #1 cause: the transfer is still too hot to release. Lay the backing back down, press again for a few seconds, then <b>let it cool down completely</b> before peeling. Peel slowly, low and flat. If it still lifts once it's cool, press again with a little more time or pressure.</dd>
+        <dt>Shiny, stiff DTF</dt><dd>Skipped the second press. Cover with parchment and press again.</dd>
+        <dt>Scorched shirt</dt><dd>Too hot or too long, or no cover sheet on a light-colored poly shirt. Lower temp slightly and use a cover sheet.</dd>
+        <dt>Shiny box on fabric</dt><dd>Too much pressure. Back the knob off a quarter turn.</dd>
+        <dt>Cracking after wash</dt><dd>Under-pressed. Usually too little time, heat or pressure.</dd>
+      </dl>
+    </div>
+    <div class="card">
+      <h3>Tell the wearer</h3>
+      <ul class="notes">
+        <li>Wait 24 hours before the first wash.</li>
+        <li>Wash inside out in cold or warm water. Tumble dry low or hang dry.</li>
+        <li>No bleach or fabric softener. Don't iron directly on the print.</li>
+      </ul>
+    </div>
+  </section>`;
+}
+function fixNumbers(){ app.querySelectorAll("ol.steps li > span:first-child").forEach(s => s.remove()); app.querySelectorAll("ol.steps li").forEach(li => li.style.gridTemplateColumns = "30px 1fr"); }
+
+/* ---------- Router ---------- */
+function route(){
+  const h = (location.hash || "").replace(/^#/, "");
+  if (h.startsWith("t-")){ const t = byId(h.slice(2)); if (t) return renderDetail(t, 0); }
+  if (h === "setup") return renderSetup();
+  if (h === "hats") return renderHats();
+  if (h === "tips") return renderTips();
+  renderList();
+}
+function renderFoot(){
+  foot.innerHTML = `Settings last updated ${esc(DATA.updated)} · Always check the sheet that came with your order.`;
+}
+window.addEventListener("hashchange", () => { route(); if (!location.hash.startsWith("#t-")) window.scrollTo(0,0); });
+renderFoot(); route();
+})();
+</script>
+
+</body>
+</html>
